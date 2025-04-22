@@ -15,6 +15,7 @@ class FileMonitorApp:
         # GUI Elements
         self.frame = tk.Frame(root, padx=10, pady=10)
         self.frame.pack(fill="both", expand=True)
+        self.auto_scroll_enabled = True
 
         self.player_label = tk.Label(self.frame, text=f"Player Name: {self.player_name}", font=("Arial", 12, "bold"))
         self.player_label.pack(anchor="w")
@@ -55,13 +56,28 @@ class FileMonitorApp:
 
         self.text_widget.config(yscrollcommand=self.scrollbar.set)
 
-
         # Color tags
         self.text_widget.tag_configure("player_kill", foreground="green")
         self.text_widget.tag_configure("other_kill", foreground="red")
         
+        #scroll event detection for auto-pausing scroll later on
+        self.text_widget.bind("<MouseWheel>", self.on_scroll)
+        self.text_widget.bind("<Button-4>", self.on_scroll)  # Linux scroll up
+        self.text_widget.bind("<Button-5>", self.on_scroll)  # Linux scroll down
+        self.text_widget.bind("<Key>", self.on_scroll)       # In case of keyboard scroll
+        self.text_widget.bind("<ButtonRelease-1>", self.on_scroll)
+        
         #Auto open the gamelog dialog box
         self.open_file()
+
+    #scroll detection
+    def on_scroll(self, event=None):
+        # Get current view position: returns a tuple like (first_visible, last_visible)
+        first, last = self.text_widget.yview()
+        # If last is < 1.0, user is not at the bottom
+        self.auto_scroll_enabled = last >= 0.999
+
+
 
     def open_file(self):
         path = filedialog.askopenfilename(
@@ -107,17 +123,38 @@ class FileMonitorApp:
             return match.group("name")
         return raw_name
 
+    #use this to get our position for freezing the window when we're not autoscrolling
+    def line_to_fraction(self, line_num):
+        total_lines = int(self.text_widget.index("end-1c").split('.')[0])
+        if total_lines == 0:
+            return 0.0
+        return line_num / total_lines
 
 
     def update_display(self):
         try:
             with open(self.file_path, 'r') as file:
                 lines = file.readlines()
+                
+                # Get top visible line before update
+                visible_index = self.text_widget.index("@0,0")
+                visible_line = int(visible_index.split('.')[0])
+
+                # Check if user is at the bottom before clearing/updating
+                yview = self.text_widget.yview()
+                user_was_at_bottom = yview[1] >= 0.999
+
+                # Save current view position if not at bottom
+                if not user_was_at_bottom:
+                    current_index = self.text_widget.index("@0,0")
+
+                self.text_widget.config(state="normal")
                 self.text_widget.delete("1.0", tk.END)
 
                 for line in lines:
                     if "<AccountLoginCharacterStatus_Character>" in line:
                         self.extract_player_name(line)
+
                     elif "<Actor Death>" in line:
                         timestamp = self.parse_timestamp(line)
                         match = re.search(
@@ -127,9 +164,8 @@ class FileMonitorApp:
                         if match:
                             killed = match.group("killed")
                             killer = match.group("killer")
-                            #simplify human NPC names
                             if killed.startswith("PU_Pilots-Human"):
-                                    killed = "Human NPC"
+                                killed = "Human NPC"
                             dmg_type = match.group("dmg")
                             output_line = f"{timestamp} - {killer} >> {killed} with {dmg_type}\n"
                             is_player = (killer == self.player_name)
@@ -167,12 +203,17 @@ class FileMonitorApp:
                             elif not is_player and self.show_other_kills.get():
                                 self.text_widget.insert(tk.END, output_line, "other_kill")
 
+                self.text_widget.config(state="disabled")
+
+                # Restore position or scroll to bottom
+                if user_was_at_bottom:
+                    self.text_widget.see(tk.END)
+                else:
+                    self.text_widget.yview_moveto(self.line_to_fraction(visible_line - 1)) #restore previous scroll position
 
         except Exception as e:
             messagebox.showerror("Error", f"Could not read file:\n{e}")
-            
-        #Scroll to bottom of window at new text entries
-        self.text_widget.see(tk.END)
+
 
 # Run the app
 if __name__ == "__main__":
