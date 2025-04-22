@@ -1,13 +1,24 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox
 import os
+import sys
 import re
 from datetime import datetime, timezone
 
+def resource_path(relative_path):
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
+
+
 class FileMonitorApp:
+       
     def __init__(self, root):
         self.root = root
         self.root.title("Star Citizen Kill Logger 3000")
+        self.root.iconbitmap(resource_path("logger_iconfile.ico"))  # Set custom window icon
         self.file_path = None
         self.last_modified = 0
         self.player_name = "Unknown"
