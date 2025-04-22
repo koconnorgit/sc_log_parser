@@ -5,7 +5,7 @@ a = Analysis(
     ['sc_log_parse.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=[('logger_iconfile.ico', '.')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -35,4 +35,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=['logger_iconfile.ico'],
 )
