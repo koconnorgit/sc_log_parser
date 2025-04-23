@@ -10,5 +10,7 @@ Use: Run .exe, find your Game.log file (in the Star Citizen installation folder)
 
 
 
-![Screenshot 2025-04-22 231452](https://github.com/user-attachments/assets/873628e9-e5e9-4aea-a700-8ddce9d1d1b7)
 ![Screenshot 2025-04-22 231439](https://github.com/user-attachments/assets/65ee084a-e1ef-4584-9bb0-fa88e78fafc1)
+
+
+![Screenshot 2025-04-22 231452](https://github.com/user-attachments/assets/873628e9-e5e9-4aea-a700-8ddce9d1d1b7)
