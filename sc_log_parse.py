@@ -54,7 +54,7 @@ class FileMonitorApp:
 
         # Player GETTING killed
         self.other_kills_checkbox = tk.Checkbutton(
-            self.filter_frame, text="Show Other Kills",
+            self.filter_frame, text="Show Player Deaths",
             variable=self.show_other_kills, command=self.update_display
         )
         self.other_kills_checkbox.pack(side="left", padx=(10, 0))
