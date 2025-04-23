@@ -54,6 +54,12 @@ class FileMonitorApp:
         self.open_button = tk.Button(self.filter_frame, text="Find Game.log", command=self.open_file)
         self.open_button.pack(side="right")
 
+        # Dark Mode toggle button
+        self.dark_mode = False
+        self.dark_mode_button = tk.Button(self.filter_frame, text="Toggle Dark Mode", command=self.toggle_dark_mode)
+        self.dark_mode_button.pack(side="right", padx=(0, 10))
+
+        
 
         # Scrollable Text Area
         self.text_frame = tk.Frame(self.frame)
@@ -80,6 +86,62 @@ class FileMonitorApp:
         
         #Auto open the gamelog dialog box
         self.open_file()
+
+    def toggle_dark_mode(self):
+        self.dark_mode = not self.dark_mode
+
+        # Define dark and light theme colors
+        bg_color = "#2e2e2e" if self.dark_mode else "SystemButtonFace"
+        text_bg = "black" if self.dark_mode else "white"
+        text_fg = "white" if self.dark_mode else "black"
+        checkbox_bg = bg_color
+        checkbox_active_bg = "#3e3e3e" if self.dark_mode else "SystemButtonFace"
+        scrollbar_bg = "#444444" if self.dark_mode else "SystemButtonFace"
+        scrollbar_trough = "#2a2a2a" if self.dark_mode else "SystemButtonFace"
+
+        # Apply background to main containers
+        self.root.configure(bg=bg_color)
+        self.frame.configure(bg=bg_color)
+        self.filter_frame.configure(bg=bg_color)
+        self.text_frame.configure(bg=bg_color)
+
+        # Update text widget
+        self.text_widget.configure(
+            bg=text_bg,
+            fg=text_fg,
+            insertbackground=text_fg,
+            selectbackground="#555555" if self.dark_mode else "#cceeff"
+        )
+
+        # Update labels and buttons
+        widgets = [
+            self.player_label,
+            self.open_button,
+            self.dark_mode_button
+        ]
+        for widget in widgets:
+            widget.configure(bg=bg_color, fg=text_fg)
+
+        # Update checkboxes
+        self.player_kills_checkbox.configure(
+            bg=checkbox_bg, fg=text_fg, activebackground=checkbox_active_bg, selectcolor=bg_color
+        )
+        self.other_kills_checkbox.configure(
+            bg=checkbox_bg, fg=text_fg, activebackground=checkbox_active_bg, selectcolor=bg_color
+        )
+
+        # Update scrollbar appearance (color change is limited in native Tkinter, but we can try)
+        try:
+            self.scrollbar.configure(
+                troughcolor=scrollbar_trough,
+                background=scrollbar_bg,
+                activebackground=scrollbar_bg
+            )
+        except tk.TclError:
+            # Some themes don't support custom scrollbar styling, so we skip it
+            pass
+
+
 
     #scroll detection
     def on_scroll(self, event=None):
