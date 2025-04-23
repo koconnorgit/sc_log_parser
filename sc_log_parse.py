@@ -31,24 +31,41 @@ class FileMonitorApp:
         self.player_label = tk.Label(self.frame, text=f"Player Name: {self.player_name}", font=("Arial", 12, "bold"))
         self.player_label.pack(anchor="w")
 
+        #player ship name stuff
+        self.player_ship_raw = "Unknown"
+        self.player_ship_clean = "Unknown"
+        self.ship_label = tk.Label(self.frame, text=f"Ship: {self.player_ship_clean}", font=("Arial", 12))
+        self.ship_label.pack(anchor="w")        
+
         # Filters + Button Row
         self.filter_frame = tk.Frame(self.frame)
         self.filter_frame.pack(fill="x", pady=(0, 10))
-
+        
         self.show_player_kills = tk.BooleanVar(value=True)
         self.show_other_kills = tk.BooleanVar(value=True)
+        self.show_misc_kills = tk.BooleanVar(value=True)  # New filter for kills that don't involve the player
 
+        # Player kills
         self.player_kills_checkbox = tk.Checkbutton(
             self.filter_frame, text="Show Player Kills",
             variable=self.show_player_kills, command=self.update_display
         )
         self.player_kills_checkbox.pack(side="left")
 
+        # Player GETTING killed
         self.other_kills_checkbox = tk.Checkbutton(
             self.filter_frame, text="Show Other Kills",
             variable=self.show_other_kills, command=self.update_display
         )
         self.other_kills_checkbox.pack(side="left", padx=(10, 0))
+
+        # Random kills not involving player
+        self.misc_kills_checkbox = tk.Checkbutton(
+        self.filter_frame, text="Show Other Kills",
+        variable=self.show_misc_kills, command=self.update_display
+        )
+        self.misc_kills_checkbox.pack(side="left", padx=(10, 0))
+
 
         # Right-aligned button
         self.open_button = tk.Button(self.filter_frame, text="Find Game.log", command=self.open_file)
@@ -75,7 +92,8 @@ class FileMonitorApp:
 
         # Color tags
         self.text_widget.tag_configure("player_kill", foreground="green")
-        self.text_widget.tag_configure("other_kill", foreground="red")
+        self.text_widget.tag_configure("player_death", foreground="red")
+        self.text_widget.tag_configure("other_kill", foreground="orange")  # orange for others
         
         #scroll event detection for auto-pausing scroll later on
         self.text_widget.bind("<MouseWheel>", self.on_scroll)
@@ -116,6 +134,7 @@ class FileMonitorApp:
         # Update labels and buttons
         widgets = [
             self.player_label,
+            self.ship_label,
             self.open_button,
             self.dark_mode_button
         ]
@@ -127,6 +146,9 @@ class FileMonitorApp:
             bg=checkbox_bg, fg=text_fg, activebackground=checkbox_active_bg, selectcolor=bg_color
         )
         self.other_kills_checkbox.configure(
+            bg=checkbox_bg, fg=text_fg, activebackground=checkbox_active_bg, selectcolor=bg_color
+        )
+        self.misc_kills_checkbox.configure(
             bg=checkbox_bg, fg=text_fg, activebackground=checkbox_active_bg, selectcolor=bg_color
         )
 
@@ -191,10 +213,30 @@ class FileMonitorApp:
                 self.player_label.config(text=f"Player Name: {self.player_name}")
 
     def extract_clean_vehicle_name(self, raw_name):
-        match = re.match(r"(?:[A-Z]+_)?(?P<name>[A-Za-z]+)(?:_\d+)?", raw_name)
-        if match:
-            return match.group("name")
-        return raw_name
+        import re
+
+        # Check for a valid manufacturer prefix (2 to 4 uppercase letters followed by underscore)
+        if re.match(r"^[A-Z]{2,4}_", raw_name):
+            # This is a ship: remove prefix, strip trailing numbers, and remove underscores
+            parts = raw_name.split("_")
+            clean_parts = parts[1:-1] if parts[-1].isdigit() else parts[1:]
+            name = " ".join(clean_parts)
+        else:
+            # Not a ship: truncate everything after the first underscore
+            base = raw_name.split("_")[0]
+
+            # Insert a space before each capital letter after the first
+            name = re.sub(r'(?<!^)([A-Z])', r' \1', base)
+
+        # Handle PU AI tag logic
+        if "PU AI" in name:
+            name = re.sub(r"\bPU AI.*", "", name).strip()
+            name = f"NPC {name}"
+
+        return name
+
+
+
 
     #use this to get our position for freezing the window when we're not autoscrolling
     def line_to_fraction(self, line_num):
@@ -227,6 +269,13 @@ class FileMonitorApp:
                 for line in lines:
                     if "<AccountLoginCharacterStatus_Character>" in line:
                         self.extract_player_name(line)
+                        
+                    elif "<Jump Drive Requesting State Change>" in line:
+                        ship_match = re.search(r"adam:\s+(?P<ship>[\w\-]+)", line)
+                        if ship_match:
+                            self.player_ship_raw = ship_match.group("ship")
+                            self.player_ship_clean = self.extract_clean_vehicle_name(self.player_ship_raw)
+                            self.ship_label.config(text=f"Ship: {self.player_ship_clean}")
 
                     elif "<Actor Death>" in line:
                         timestamp = self.parse_timestamp(line)
@@ -237,21 +286,34 @@ class FileMonitorApp:
                         if match:
                             killed = match.group("killed")
                             killer = match.group("killer")
+                            dmg_type = match.group("dmg")
+
                             if killed.startswith("PU_Pilots-Human"):
                                 killed = "Human NPC"
-                            dmg_type = match.group("dmg")
-                            output_line = f"{timestamp} - {killer} >> {killed} with {dmg_type}\n"
-                            is_player = (killer == self.player_name)
 
-                            if is_player and self.show_player_kills.get():
-                                self.text_widget.insert(tk.END, output_line, "player_kill")
-                            elif not is_player and self.show_other_kills.get():
-                                self.text_widget.insert(tk.END, output_line, "other_kill")
+                            output_line = f"{timestamp} - {killer} >> {killed} with {dmg_type}\n"
+
+                            # Determine tag
+                            if killer == self.player_name:
+                                tag = "player_kill"
+                            elif killed == self.player_name:
+                                tag = "player_death"
+                            else:
+                                tag = "other_kill"
+
+                            # Show based on filters
+                            if (
+                                (tag == "player_kill" and self.show_player_kills.get()) or
+                                (tag == "player_death" and self.show_other_kills.get()) or
+                                (tag == "other_kill" and self.show_misc_kills.get())
+                            ):
+                                self.text_widget.insert(tk.END, output_line, tag)
+
 
                     elif "<Vehicle Destruction>" in line:
                         timestamp = self.parse_timestamp(line)
                         match = re.search(
-                            r"Vehicle '(?P<vehicle>[^']+)'.*?destroy level (?P<from_level>\d) to (?P<to_level>\d).*?caused by '(?P<causer>[^']+)'",
+                            r"Vehicle '(?P<vehicle>[^']+)'.*?destroy level (?P<from_level>\d) to (?P<to_level>\d).*?caused by '(?P<causer>[^']+)' \[\d+\] with '(?P<dmg>[^']+)'",
                             line
                         )
                         if match:
@@ -259,22 +321,40 @@ class FileMonitorApp:
                             vehicle_name = self.extract_clean_vehicle_name(raw_vehicle)
                             from_level = int(match.group("from_level"))
                             to_level = int(match.group("to_level"))
-                            causer = match.group("causer")
+                            causer_raw = match.group("causer")
+                            dmg_type = match.group("dmg")
 
-                            if from_level == 0 and to_level == 1:
-                                kill_type = f"Soft Kill ({vehicle_name})"
-                            elif (from_level == 1 and to_level == 2) or (from_level == 0 and to_level == 2):
-                                kill_type = f"Hard Kill ({vehicle_name})"
+                            causer_clean = self.extract_clean_vehicle_name(causer_raw)
+
+                            # Determine kill type text
+                            if dmg_type == "Collision":
+                                output_line = f"{timestamp} - {vehicle_name} collided with {causer_clean}\n"
                             else:
-                                kill_type = f"Unknown Kill Type ({from_level}->{to_level}) ({vehicle_name})"
+                                if from_level == 0 and to_level == 1:
+                                    kill_type = f"Soft Kill ({vehicle_name})"
+                                elif (from_level == 1 and to_level == 2) or (from_level == 0 and to_level == 2):
+                                    kill_type = f"Hard Kill ({vehicle_name})"
+                                else:
+                                    kill_type = f"Unknown Kill Type ({from_level}->{to_level}) ({vehicle_name})"
+                                output_line = f"{timestamp} - {causer_raw} >> {kill_type}\n"
 
-                            output_line = f"{timestamp} - {causer} >> {kill_type}\n"
-                            is_player = (causer == self.player_name)
+                            # Decide tag
+                            if causer_raw == self.player_name:
+                                tag = "player_kill"
+                            elif raw_vehicle == self.player_ship_raw:
+                                tag = "player_death"
+                            else:
+                                tag = "other_kill"
 
-                            if is_player and self.show_player_kills.get():
-                                self.text_widget.insert(tk.END, output_line, "player_kill")
-                            elif not is_player and self.show_other_kills.get():
-                                self.text_widget.insert(tk.END, output_line, "other_kill")
+                            # Show if meets filter
+                            if (
+                                (tag == "player_kill" and self.show_player_kills.get()) or
+                                (tag == "player_death" and self.show_other_kills.get()) or
+                                (tag == "other_kill" and self.show_misc_kills.get())
+                            ):
+                                self.text_widget.insert(tk.END, output_line, tag)
+
+
 
                 self.text_widget.config(state="disabled")
 
