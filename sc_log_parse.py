@@ -31,12 +31,6 @@ class FileMonitorApp:
         self.player_label = tk.Label(self.frame, text=f"Player Name: {self.player_name}", font=("Arial", 12, "bold"))
         self.player_label.pack(anchor="w")
 
-        #player ship name stuff
-        self.player_ship_raw = "Unknown"
-        self.player_ship_clean = "Unknown"
-        self.ship_label = tk.Label(self.frame, text=f"Ship: {self.player_ship_clean}", font=("Arial", 12))
-        self.ship_label.pack(anchor="w")        
-
         # Filters + Button Row
         self.filter_frame = tk.Frame(self.frame)
         self.filter_frame.pack(fill="x", pady=(0, 10))
@@ -134,7 +128,6 @@ class FileMonitorApp:
         # Update labels and buttons
         widgets = [
             self.player_label,
-            self.ship_label,
             self.open_button,
             self.dark_mode_button
         ]
@@ -270,13 +263,6 @@ class FileMonitorApp:
                     if "<AccountLoginCharacterStatus_Character>" in line:
                         self.extract_player_name(line)
                         
-                    elif "<Jump Drive Requesting State Change>" in line:
-                        ship_match = re.search(r"adam:\s+(?P<ship>[\w\-]+)", line)
-                        if ship_match:
-                            self.player_ship_raw = ship_match.group("ship")
-                            self.player_ship_clean = self.extract_clean_vehicle_name(self.player_ship_raw)
-                            self.ship_label.config(text=f"Ship: {self.player_ship_clean}")
-
                     elif "<Actor Death>" in line:
                         timestamp = self.parse_timestamp(line)
                         match = re.search(
@@ -341,8 +327,6 @@ class FileMonitorApp:
                             # Decide tag
                             if causer_raw == self.player_name:
                                 tag = "player_kill"
-                            elif raw_vehicle == self.player_ship_raw:
-                                tag = "player_death"
                             else:
                                 tag = "other_kill"
 
