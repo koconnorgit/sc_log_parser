@@ -258,6 +258,7 @@ class FileMonitorApp:
 
                 self.text_widget.config(state="normal")
                 self.text_widget.delete("1.0", tk.END)
+                pending_ship_kill = None  # store (timestamp, causer) for next line check
 
                 for line in lines:
                     if "<AccountLoginCharacterStatus_Character>" in line:
@@ -274,7 +275,7 @@ class FileMonitorApp:
                             killer = match.group("killer")
                             dmg_type = match.group("dmg")
 
-                            if killed.startswith("PU_Pilots-Human"):
+                            if killed.startswith("PU_Pilots-Human") or killed.startswith("PU_Human"):
                                 killed = "Human NPC"
 
                             output_line = f"{timestamp} - {killer} >> {killed} with {dmg_type}\n"
@@ -331,12 +332,31 @@ class FileMonitorApp:
                                 tag = "other_kill"
 
                             # Show if meets filter
-                            if (
-                                (tag == "player_kill" and self.show_player_kills.get()) or
-                                (tag == "player_death" and self.show_other_kills.get()) or
-                                (tag == "other_kill" and self.show_misc_kills.get())
-                            ):
+                            if tag != "player_kill":
+                                pending_ship_kill = (timestamp, causer_raw)
+                            else:
+                                if self.show_player_kills.get():
+                                    self.text_widget.insert(tk.END, output_line, tag)
+                            if tag == "other_kill" and self.show_misc_kills.get():
                                 self.text_widget.insert(tk.END, output_line, tag)
+                    elif "<[ActorState] Corpse>" in line and pending_ship_kill:
+                        corpse_match = re.search(r"Player '(?P<name>[^']+)'", line)
+                        if corpse_match:
+                            killed_player = corpse_match.group("name")
+                            if killed_player != self.player_name:
+                                timestamp, causer = pending_ship_kill
+                                output_line = f"{timestamp} - {causer} >> {killed_player} via ship destruction\n"
+                                tag = "player_kill" if causer == self.player_name else "other_kill"
+                                if (
+                                    (tag == "player_kill" and self.show_player_kills.get()) or
+                                    (tag == "other_kill" and self.show_misc_kills.get())
+                                ):
+                                    self.text_widget.insert(tk.END, output_line, tag)
+                        pending_ship_kill = None  # Clear after use
+                    else:
+                        pending_ship_kill = None  # Clear if not immediately followed
+
+
 
 
 
