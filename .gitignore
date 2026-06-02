@@ -1,0 +1,6 @@
+# PyInstaller build artifacts (previously leaked local paths)
+build/
+dist/
+*.spec.bak
+__pycache__/
+*.pyc
